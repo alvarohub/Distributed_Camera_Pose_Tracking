@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi-Person Skeleton Tracker</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="header">
+      <h1>Multi-Person Skeleton Tracker</h1>
+      <p id="status">Loading model...</p>
+      <div id="controls">
+        <label
+          >Model:
+          <select id="model-select">
+            <option value="movenet">MoveNet MultiPose (17pts, multi-person)</option>
+            <option value="mediapipe">MediaPipe BlazePose (33pts, 3D)</option>
+          </select>
+        </label>
+        <label
+          >Min Confidence: <input type="range" id="confidence" min="0.1" max="0.9" step="0.05" value="0.3" />
+          <span id="conf-val">0.30</span>
+        </label>
+        <label> <input type="checkbox" id="show-points" checked /> Keypoints </label>
+        <label> <input type="checkbox" id="show-skeleton" checked /> Skeleton </label>
+        <label> <input type="checkbox" id="show-bbox" checked /> Bounding Box </label>
+      </div>
+    </div>
+    <div id="canvas-container">
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <!-- TensorFlow.js + MoveNet (local) -->
+    <script src="lib/tf.min.js"></script>
+    <script src="lib/pose-detection.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

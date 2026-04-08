@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skeleton Viewer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #111;
+        color: #eee;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+      #header {
+        text-align: center;
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 1.3rem;
+        color: #4ecdc4;
+        margin-bottom: 4px;
+      }
+      #status {
+        font-size: 0.85rem;
+        color: #aaa;
+        margin-bottom: 6px;
+      }
+      #status.ready {
+        color: #00b894;
+      }
+      #status.error {
+        color: #ff6b6b;
+      }
+      #info {
+        font-size: 0.85rem;
+        color: #888;
+        font-family: monospace;
+      }
+      canvas {
+        display: block;
+        border: 2px solid #333;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <h1>Skeleton Viewer</h1>
+      <p id="status">Connecting to tracker...</p>
+      <p id="info"></p>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+      // ── Config ──────────────────────────────────────────────────────────────────
+      const PERSON_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A29BFE', '#FD79A8', '#00B894'];
+
+      const SKELETON_CONNECTIONS = [
+        [0, 1],
+        [0, 2],
+        [1, 3],
+        [2, 4],
+        [5, 6],
+        [5, 7],
+        [7, 9],
+        [6, 8],
+        [8, 10],
+        [5, 11],
+        [6, 12],
+        [11, 12],
+        [11, 13],
+        [13, 15],
+        [12, 14],
+        [14, 16],
+      ];
+
+      // Active connections — updated from WS payload when model changes
+      let activeConnections = SKELETON_CONNECTIONS;
+
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const statusEl = document.getElementById('status');
+      const infoEl = document.getElementById('info');
+
+      let W = 640,
+        H = 480;
+      canvas.width = W;
+      canvas.height = H;
+
+      // ── Drawing ─────────────────────────────────────────────────────────────────
+      const MIN_CONF = 0.3;
+
+      function drawFrame(data) {
+        // Resize canvas if source changed
+        if (data.w !== W || data.h !== H) {
+          W = data.w;
+          H = data.h;
+          canvas.width = W;
+          canvas.height = H;
+        }
+
+        // Clear
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, W, H);
+
+        // Draw each person
+        for (let p = 0; p < data.people.length; p++) {
+          const person = data.people[p];
+          const kps = person.keypoints;
+          const color = PERSON_COLORS[p % PERSON_COLORS.length];
+
+          // Skeleton
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          for (const [i, j] of activeConnections) {
+            const a = kps[i],
+              b = kps[j];
+            if (a.score < MIN_CONF || b.score < MIN_CONF) continue;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+
+          // Keypoints (size varies with z for 3D depth cue)
+          for (const kp of kps) {
+            if (kp.score < MIN_CONF) continue;
+            const radius = kp.z ? Math.max(2, Math.min(8, 5 - kp.z * 10)) : 5;
+            ctx.beginPath();
+            ctx.arc(kp.x, kp.y, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+
+          // Label
+          const valid = kps.filter((k) => k.score >= MIN_CONF);
+          if (valid.length) {
+            const top = valid.reduce((a, b) => (a.y < b.y ? a : b));
+            ctx.fillStyle = color;
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText(`Person ${p + 1}`, top.x - 30, top.y - 20);
+          }
+        }
+
+        // Recording time overlay
+        const elapsed = data.t;
+        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const ss = String(Math.floor(elapsed % 60)).padStart(2, '0');
+        const ms = String(Math.floor((elapsed * 10) % 10));
+        ctx.fillStyle = '#00FF00';
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(`REC ${mm}:${ss}.${ms}`, 10, 25);
+        ctx.fillText(`People: ${data.people.length}`, 10, 45);
+
+        // Model label
+        if (data.model) {
+          ctx.fillText(`Model: ${data.model === 'movenet' ? 'MoveNet 17pt' : 'MediaPipe 33pt 3D'}`, 10, 65);
+        }
+
+        // Blinking red dot
+        if (Math.floor(elapsed * 2) % 2 === 0) {
+          ctx.beginPath();
+          ctx.arc(W - 20, 20, 8, 0, 2 * Math.PI);
+          ctx.fillStyle = '#FF0000';
+          ctx.fill();
+        }
+      }
+
+      // ── WebSocket ───────────────────────────────────────────────────────────────
+      let frameRate = 0,
+        frameCounter = 0,
+        lastFpsTime = performance.now();
+
+      function connect() {
+        const wsUrl = `ws://${location.hostname}:8765`;
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          statusEl.textContent = 'Connected ✓';
+          statusEl.className = 'ready';
+          // Send a ping so the relay knows we're a viewer
+          ws.send(JSON.stringify({ type: 'viewer' }));
+        };
+
+        ws.onmessage = (evt) => {
+          const data = JSON.parse(evt.data);
+          if (data.connections) activeConnections = data.connections;
+          drawFrame(data);
+
+          // FPS counter
+          frameCounter++;
+          const now = performance.now();
+          if (now - lastFpsTime >= 1000) {
+            frameRate = frameCounter;
+            frameCounter = 0;
+            lastFpsTime = now;
+          }
+          infoEl.textContent = `${frameRate} fps`;
+        };
+
+        ws.onclose = () => {
+          statusEl.textContent = 'Disconnected — reconnecting...';
+          statusEl.className = 'error';
+          setTimeout(connect, 2000);
+        };
+
+        ws.onerror = () => ws.close();
+      }
+
+      connect();
+    </script>
+  </body>
+</html>

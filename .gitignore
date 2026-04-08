@@ -1,0 +1,10 @@
+# Downloaded by setup.sh — re-run to restore
+lib/
+model/
+model-mediapipe/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
