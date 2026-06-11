@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skeleton Collector — Monitoring Station</title>
+    <link rel="stylesheet" href="collector.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <h1>Skeleton Collector</h1>
+      <span id="hub-status" class="status">Connecting to hub…</span>
+      <div class="global-controls">
+        <label><input type="checkbox" id="global-raw" checked /> Raw video</label>
+        <label><input type="checkbox" id="global-skeleton" checked /> Skeleton</label>
+        <button id="broadcast-log-start" class="btn">● Log all</button>
+        <button id="broadcast-log-stop" class="btn">■ Stop all</button>
+        <button id="shutdown-servers" class="btn btn-danger" title="Stop the hub and tracker servers (ends the demo)">
+          ⏻ Stop servers
+        </button>
+      </div>
+    </header>
+
+    <main id="grid">
+      <p id="empty-hint">No trackers connected. Open a tracker page and point it at this hub.</p>
+    </main>
+
+    <!-- Tile template -->
+    <template id="tile-template">
+      <section class="tile">
+        <div class="tile-header">
+          <span class="tile-id">tracker</span>
+          <span class="tile-stats">— fps · — people</span>
+          <span class="tile-conn">●</span>
+        </div>
+        <div class="tile-canvas-wrap">
+          <canvas class="tile-canvas" width="640" height="480"></canvas>
+          <span class="tile-rec" hidden>● REC</span>
+        </div>
+        <div class="tile-controls">
+          <label
+            >Model:
+            <select class="ctl-model">
+              <option value="movenet">MoveNet 17pt</option>
+              <option value="mediapipe">MediaPipe 33pt 3D</option>
+            </select>
+          </label>
+          <label
+            >Conf:
+            <input type="range" class="ctl-conf" min="0.1" max="0.9" step="0.05" value="0.3" />
+            <span class="ctl-conf-val">0.30</span>
+          </label>
+          <label><input type="checkbox" class="ctl-skel" checked /> Skel</label>
+          <label><input type="checkbox" class="ctl-raw" checked /> Raw</label>
+          <button class="ctl-log btn">● Log</button>
+        </div>
+        <div class="tile-config">
+          <button
+            class="ctl-save btn"
+            title="Write current settings to this tracker's config file (used on next launch)"
+          >
+            💾 Save defaults
+          </button>
+          <button class="ctl-reset btn" title="Reload the saved config file and discard runtime tweaks">↺ Reset</button>
+          <span class="ctl-config-info"></span>
+        </div>
+      </section>
+    </template>
+
+    <!-- Shown after the user stops the servers -->
+    <div id="shutdown-overlay" hidden>
+      <div class="shutdown-card">
+        <h2>Servers stopped</h2>
+        <p>The hub and tracker servers have been shut down. You can close this tab.</p>
+      </div>
+    </div>
+
+    <script src="collector.js"></script>
+  </body>
+</html>

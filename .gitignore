@@ -1,10 +1,18 @@
 # Downloaded by setup.sh — re-run to restore
-lib/
-model/
-model-mediapipe/
+skeleton-tracker-computer/lib/
+skeleton-tracker-computer/model/
+skeleton-tracker-computer/model-mediapipe/
 
 # OS
 .DS_Store
 
 # Editor
 .vscode/
+
+# Python virtual environment (recreate with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# Backups written when the collector saves new tracker defaults
+skeleton-tracker-computer/trackers/*.json.bak

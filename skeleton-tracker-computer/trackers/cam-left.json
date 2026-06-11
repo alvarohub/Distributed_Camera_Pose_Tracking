@@ -1,0 +1,19 @@
+{
+  "_comment": "Per-tracker config for ?id=cam-left. Grouped into camera / processing / communication. 'camera' can be a label substring (preferred, stable), an exact deviceId, or a numeric index.",
+  "tracker_id": "cam-left",
+
+  "_camera": "── CAMERA: physical capture ──",
+  "camera": 0,
+  "resolution": { "width": 640, "height": 480 },
+
+  "_processing": "── PROCESSING: how frames are analyzed ──",
+  "model": "movenet",
+  "confidence": 0.3,
+  "mirror": true,
+  "calibration": null,
+
+  "_communication": "── COMMUNICATION: what is streamed + where ──",
+  "collector": "ws://localhost:9000",
+  "streamSkeleton": true,
+  "streamRaw": true
+}

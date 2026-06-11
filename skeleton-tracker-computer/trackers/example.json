@@ -1,0 +1,31 @@
+{
+  "_comment": "TEMPLATE — copy to trackers/<your-id>.json and open index.html?id=<your-id>. Fields are grouped into camera / processing / communication; the _camera/_processing/_communication keys are just section headers and are ignored by the tracker. JSON has no real comments, so field docs live in _fields below.",
+  "_fields": {
+    "tracker_id": "human label for this tracker (informational; the real id is the ?id= in the URL / filename)",
+    "camera": "which webcam: label substring like 'BRIO' or 'FaceTime' (preferred — stable across replugs), OR an exact deviceId, OR a numeric index (0,1,2…). Label matching is case-insensitive.",
+    "resolution": "requested capture size { width, height }. The browser picks the closest the camera supports.",
+    "model": "'movenet' (17 keypoints, multi-person, 2D) or 'mediapipe' (33 keypoints, single-person-ish, 3D)",
+    "confidence": "0..1 minimum keypoint score used for drawing",
+    "mirror": "true = selfie/flip horizontally (raw video AND keypoints stay consistent)",
+    "calibration": "RESERVED for later — path to a lens undistortion / calibration file (null for now)",
+    "collector": "hub WebSocket URL, e.g. ws://localhost:9000 or ws://192.168.1.50:9000",
+    "streamSkeleton": "true = send computed keypoints/skeleton frames to the collector (turn off to go dark / save bandwidth)",
+    "streamRaw": "true = send throttled raw JPEG frames to the collector so it can show video behind the skeleton"
+  },
+  "tracker_id": "cam-example",
+
+  "_camera": "── CAMERA: physical capture ──",
+  "camera": "FaceTime",
+  "resolution": { "width": 1280, "height": 720 },
+
+  "_processing": "── PROCESSING: how frames are analyzed ──",
+  "model": "movenet",
+  "confidence": 0.3,
+  "mirror": true,
+  "calibration": null,
+
+  "_communication": "── COMMUNICATION: what is streamed + where ──",
+  "collector": "ws://localhost:9000",
+  "streamSkeleton": true,
+  "streamRaw": true
+}
