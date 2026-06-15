@@ -81,6 +81,20 @@ body {
   color: #fff;
 }
 
+.btn.btn-rec {
+  background: #f4f6fb;
+  border-color: #d7dbe8;
+  color: #1f2430;
+  font-weight: 700;
+  min-width: 64px;
+}
+
+.btn.btn-rec.active {
+  background: #c0392b;
+  border-color: #e74c3c;
+  color: #fff;
+}
+
 .btn.btn-danger {
   background: #4a2230;
   border-color: #6a2a3a;
@@ -129,9 +143,10 @@ body {
 
 #grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
-  padding: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 340px));
+  gap: 12px;
+  padding: 14px;
+  justify-content: start;
 }
 
 #empty-hint {
@@ -197,13 +212,63 @@ body {
   position: absolute;
   top: 8px;
   left: 8px;
-  color: #fff;
-  background: rgba(192, 57, 43, 0.85);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f8f8fb;
+  background: rgba(5, 5, 8, 0.35);
+  padding: 4px 8px 4px 10px;
+  border-radius: 5px;
+  font-size: 0.74rem;
   font-family: monospace;
   font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+.tile-rec::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-left: 2px solid rgba(248, 248, 251, 0.92);
+  border-top: 2px solid rgba(248, 248, 251, 0.92);
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #f5f6fa;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.rec-label {
+  color: #fff;
+}
+
+.rec-time {
+  color: #fff;
+  min-width: 64px;
+  text-align: right;
+}
+
+.tile-rec.recording .rec-dot {
+  background: #ff4d4d;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  animation: rec-blink 1s step-end infinite;
+}
+
+@keyframes rec-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.25;
+  }
 }
 
 .tile-controls {

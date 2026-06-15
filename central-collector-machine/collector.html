@@ -13,8 +13,9 @@
       <div class="global-controls">
         <label><input type="checkbox" id="global-raw" checked /> Raw video</label>
         <label><input type="checkbox" id="global-skeleton" checked /> Skeleton</label>
-        <button id="broadcast-log-start" class="btn">● Log all</button>
-        <button id="broadcast-log-stop" class="btn">■ Stop all</button>
+        <button id="broadcast-log-start" class="btn">● Start all</button>
+        <button id="broadcast-log-pause" class="btn">⏸ Pause all</button>
+        <button id="broadcast-log-save" class="btn">💾 Save all</button>
         <button id="shutdown-servers" class="btn btn-danger" title="Stop the hub and tracker servers (ends the demo)">
           ⏻ Stop servers
         </button>
@@ -35,7 +36,11 @@
         </div>
         <div class="tile-canvas-wrap">
           <canvas class="tile-canvas" width="640" height="480"></canvas>
-          <span class="tile-rec" hidden>● REC</span>
+          <span class="tile-rec" hidden>
+            <span class="rec-dot"></span>
+            <span class="rec-label">REC</span>
+            <span class="rec-time">00:00:00</span>
+          </span>
         </div>
         <div class="tile-controls">
           <label
@@ -52,7 +57,9 @@
           </label>
           <label><input type="checkbox" class="ctl-skel" checked /> Skel</label>
           <label><input type="checkbox" class="ctl-raw" checked /> Raw</label>
-          <button class="ctl-log btn">● Log</button>
+          <button class="ctl-log-toggle btn btn-rec">REC</button>
+          <button class="ctl-log-save btn">💾 Save</button>
+          <button class="ctl-log-reset btn">↺ Reset</button>
         </div>
         <div class="tile-config">
           <button
@@ -61,7 +68,7 @@
           >
             💾 Save defaults
           </button>
-          <button class="ctl-reset btn" title="Reload the saved config file and discard runtime tweaks">↺ Reset</button>
+          <button class="ctl-reset btn" title="Reload the saved config file and discard runtime tweaks">↺ Config</button>
           <span class="ctl-config-info"></span>
         </div>
       </section>

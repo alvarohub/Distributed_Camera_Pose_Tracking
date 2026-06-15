@@ -426,7 +426,13 @@ const startTime = Date.now();
 // Runtime flags driven by collector commands (seeded from CONFIG in main())
 let streamingSkeleton = true; // send computed skeleton frames?
 let streamingVideo = true; // send raw JPEG frames?
-let logging = false; // local NDJSON logging (stub for now)
+let logging = false;
+let loggingSessionId = null;
+let loggingPath = null;
+let loggingEntries = 0;
+let pendingLogEntries = [];
+let logFlushInFlight = false;
+const LOG_BATCH_SIZE = 30;
 
 function setHubStatus(text, cls) {
   if (!hubStatusEl) return;
@@ -445,6 +451,155 @@ function sendHello() {
       resolution: { width: VIDEO_WIDTH, height: VIDEO_HEIGHT },
     }),
   );
+}
+
+function currentCameraToken() {
+  const label = (currentCameraLabel || '').trim();
+  if (label) return label;
+  return selectedDeviceId || TRACKER_ID;
+}
+
+async function startLoggingSession(sessionLabel) {
+  const res = await fetch('./api/log/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tracker_id: TRACKER_ID,
+      camera: currentCameraToken(),
+      session_label: sessionLabel || `session-${Date.now()}`,
+    }),
+  });
+  if (!res.ok) throw new Error(`log start failed: HTTP ${res.status}`);
+  const body = await res.json();
+  if (!body.ok || !body.session_id) throw new Error(body.error || 'log start failed');
+  loggingSessionId = body.session_id;
+  loggingPath = body.path || null;
+  loggingEntries = 0;
+}
+
+async function flushLogEntries(force = false) {
+  if (!loggingSessionId || logFlushInFlight || pendingLogEntries.length === 0) return;
+  if (!force && pendingLogEntries.length < LOG_BATCH_SIZE) return;
+  const chunkSize = force ? pendingLogEntries.length : Math.min(LOG_BATCH_SIZE, pendingLogEntries.length);
+  const batch = pendingLogEntries.splice(0, chunkSize);
+  logFlushInFlight = true;
+  try {
+    const res = await fetch('./api/log/append', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tracker_id: TRACKER_ID,
+        session_id: loggingSessionId,
+        entries: batch,
+      }),
+    });
+    if (!res.ok) throw new Error(`log append failed: HTTP ${res.status}`);
+    const body = await res.json();
+    if (!body.ok) throw new Error(body.error || 'log append failed');
+    loggingEntries = body.entries != null ? body.entries : loggingEntries + batch.length;
+  } catch (err) {
+    pendingLogEntries = batch.concat(pendingLogEntries);
+    console.error('Log append failed:', err);
+  } finally {
+    logFlushInFlight = false;
+  }
+}
+
+async function startLogging(sessionLabel) {
+  if (!loggingSessionId) {
+    await startLoggingSession(sessionLabel);
+  }
+  logging = true;
+  sendStatus();
+}
+
+async function pauseLogging() {
+  logging = false;
+  while (pendingLogEntries.length > 0) {
+    await flushLogEntries(true);
+    if (logFlushInFlight) break;
+  }
+  sendStatus();
+}
+
+async function saveLogging() {
+  if (!loggingSessionId) {
+    throw new Error('no active log session');
+  }
+  await pauseLogging();
+  const sessionId = loggingSessionId;
+  const res = await fetch('./api/log/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tracker_id: TRACKER_ID,
+      session_id: sessionId,
+    }),
+  });
+  if (!res.ok) throw new Error(`log save failed: HTTP ${res.status}`);
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.error || 'log save failed');
+  loggingPath = body.path || loggingPath;
+  loggingEntries = body.entries != null ? body.entries : loggingEntries;
+  loggingSessionId = null;
+  pendingLogEntries = [];
+  sendStatus();
+  return body;
+}
+
+async function discardLogging() {
+  if (logging) {
+    await pauseLogging();
+  }
+  if (!loggingSessionId) {
+    loggingPath = null;
+    loggingEntries = 0;
+    pendingLogEntries = [];
+    sendStatus();
+    return { ok: true };
+  }
+
+  const sessionId = loggingSessionId;
+  const res = await fetch('./api/log/discard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tracker_id: TRACKER_ID,
+      session_id: sessionId,
+    }),
+  });
+  if (!res.ok) throw new Error(`log discard failed: HTTP ${res.status}`);
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.error || 'log discard failed');
+
+  logging = false;
+  loggingSessionId = null;
+  loggingPath = null;
+  loggingEntries = 0;
+  pendingLogEntries = [];
+  sendStatus();
+  return body;
+}
+
+function queueLogEntry(poses) {
+  if (!logging || !loggingSessionId) return;
+  pendingLogEntries.push({
+    ts_unix_ms: Date.now(),
+    tracker_id: TRACKER_ID,
+    camera: currentCameraToken(),
+    frame_id: frameId,
+    model: activeModel,
+    resolution: { width: VIDEO_WIDTH, height: VIDEO_HEIGHT },
+    people: poses.map((pose, i) => ({
+      id: pose.id != null ? pose.id : i,
+      keypoints: pose.keypoints.map((kp) => ({
+        x: Math.round(kp.x * 10) / 10,
+        y: Math.round(kp.y * 10) / 10,
+        z: Math.round((kp.z || 0) * 1000) / 1000,
+        score: Math.round(kp.score * 1000) / 1000,
+      })),
+    })),
+  });
 }
 
 function connectWebSocket() {
@@ -653,14 +808,24 @@ function handleCommand(msg) {
       ack(request_id, true);
       break;
     case 'start_logging':
-      logging = true; // TODO: wire NDJSON writer (File System Access API or sidecar)
-      sendStatus();
-      ack(request_id, true, 'logging started (stub)');
+      startLogging(args.session_label)
+        .then(() => ack(request_id, true, `logging started → ${loggingPath}`))
+        .catch((e) => ack(request_id, false, e.message));
       break;
     case 'stop_logging':
-      logging = false;
-      sendStatus();
-      ack(request_id, true, 'logging stopped (stub)');
+      pauseLogging()
+        .then(() => ack(request_id, true, 'logging paused'))
+        .catch((e) => ack(request_id, false, e.message));
+      break;
+    case 'save_logging':
+      saveLogging()
+        .then((r) => ack(request_id, true, `logging saved → ${r.path}`))
+        .catch((e) => ack(request_id, false, e.message));
+      break;
+    case 'discard_logging':
+      discardLogging()
+        .then(() => ack(request_id, true, 'logging discarded'))
+        .catch((e) => ack(request_id, false, e.message));
       break;
     default:
       ack(request_id, false, `unknown command: ${command}`);
@@ -678,6 +843,7 @@ function sendSkeletonFrame(poses, minConf) {
       ts_unix_ms: Date.now(),
       t: (Date.now() - startTime) / 1000,
       model: activeModel,
+      min_confidence: minConf,
       connections: activeConnections,
       resolution: { width: VIDEO_WIDTH, height: VIDEO_HEIGHT },
       people: poses.map((pose, i) => ({
@@ -735,10 +901,15 @@ function sendStatus() {
       streaming: streamingVideo,
       streaming_skeleton: streamingSkeleton,
       logging,
+      log_path: loggingPath,
+      log_entries: loggingEntries,
     }),
   );
 }
 setInterval(sendStatus, 1000);
+setInterval(() => {
+  flushLogEntries(false);
+}, 1000);
 
 // ── FPS counter ─────────────────────────────────────────────────────────────
 let frameCount = 0;
@@ -803,81 +974,88 @@ document.addEventListener('visibilitychange', () => {
 async function detect() {
   if (!running) return;
 
-  let poses;
-  if (activeModel === 'movenet' && detector) {
-    const raw = await detector.estimatePoses(video, { maxPoses: 6, flipHorizontal: false });
-    poses = raw.map((p) => ({
-      id: p.id,
-      keypoints: p.keypoints.map((kp) => ({ ...kp, z: 0 })),
-    }));
-  } else if (activeModel === 'mediapipe' && mpDetector) {
-    const result = mpDetector.detectForVideo(video, performance.now());
-    poses = (result.landmarks || []).map((landmarks, i) => ({
-      id: i,
-      keypoints: landmarks.map((lm, j) => ({
-        x: lm.x * VIDEO_WIDTH,
-        y: lm.y * VIDEO_HEIGHT,
-        z: result.worldLandmarks[i] ? result.worldLandmarks[i][j].z : 0,
-        score: lm.visibility != null ? lm.visibility : 1.0,
-        name: MEDIAPIPE_KEYPOINT_NAMES[j],
-      })),
-    }));
-  } else {
-    scheduleDetect();
-    return;
+  try {
+    // Camera can briefly be not-ready during switches/reconnects.
+    if (video.readyState < 2) return;
+
+    let poses;
+    if (activeModel === 'movenet' && detector) {
+      const raw = await detector.estimatePoses(video, { maxPoses: 6, flipHorizontal: false });
+      poses = raw.map((p) => ({
+        id: p.id,
+        keypoints: p.keypoints.map((kp) => ({ ...kp, z: 0 })),
+      }));
+    } else if (activeModel === 'mediapipe' && mpDetector) {
+      const result = mpDetector.detectForVideo(video, performance.now());
+      poses = (result.landmarks || []).map((landmarks, i) => ({
+        id: i,
+        keypoints: landmarks.map((lm, j) => ({
+          x: lm.x * VIDEO_WIDTH,
+          y: lm.y * VIDEO_HEIGHT,
+          z: result.worldLandmarks[i] ? result.worldLandmarks[i][j].z : 0,
+          score: lm.visibility != null ? lm.visibility : 1.0,
+          name: MEDIAPIPE_KEYPOINT_NAMES[j],
+        })),
+      }));
+    } else {
+      return;
+    }
+
+    // Smooth keypoints temporally
+    smoothKeypoints(poses);
+
+    // Draw video (mirrored if configured)
+    ctx.save();
+    if (CONFIG.mirror) {
+      ctx.translate(VIDEO_WIDTH, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
+    ctx.restore();
+
+    const minConf = parseFloat(confSlider.value);
+    const showPts = showPointsCb.checked;
+    const showSkel = showSkeletonCb.checked;
+    const showBbox = showBboxCb.checked;
+
+    // Mirror keypoints for drawing/streaming when configured
+    const mirroredPoses = [];
+    for (let i = 0; i < poses.length; i++) {
+      const pose = poses[i];
+      const color = PERSON_COLORS[i % PERSON_COLORS.length];
+
+      const mirrored = pose.keypoints.map((kp) => ({
+        ...kp,
+        x: CONFIG.mirror ? VIDEO_WIDTH - kp.x : kp.x,
+      }));
+
+      mirroredPoses.push({ ...pose, keypoints: mirrored });
+
+      if (showSkel) drawSkeleton(mirrored, color, minConf);
+      if (showPts) drawKeypoints(mirrored, color, minConf);
+      if (showBbox) drawBoundingBox(mirrored, color, minConf);
+      drawPersonLabel(mirrored, i, color, minConf);
+    }
+
+    // Stream mirrored poses + (throttled) raw video to the collector hub
+    lastPeopleCount = poses.length;
+    frameId++;
+    sendSkeletonFrame(mirroredPoses, minConf);
+    maybeSendVideoFrame();
+    queueLogEntry(mirroredPoses);
+
+    // Info overlay
+    updateFps();
+    drawFps();
+    ctx.fillStyle = '#00FF00';
+    ctx.font = '14px monospace';
+    ctx.fillText(`People: ${poses.length}`, 10, 45);
+    ctx.fillText(`Model: ${activeModel === 'movenet' ? 'MoveNet 17pt' : 'MediaPipe 33pt 3D'}`, 10, 65);
+  } catch (err) {
+    console.error('Detection loop error:', err);
+  } finally {
+    if (running) scheduleDetect();
   }
-
-  // Smooth keypoints temporally
-  smoothKeypoints(poses);
-
-  // Draw video (mirrored if configured)
-  ctx.save();
-  if (CONFIG.mirror) {
-    ctx.translate(VIDEO_WIDTH, 0);
-    ctx.scale(-1, 1);
-  }
-  ctx.drawImage(video, 0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-  ctx.restore();
-
-  const minConf = parseFloat(confSlider.value);
-  const showPts = showPointsCb.checked;
-  const showSkel = showSkeletonCb.checked;
-  const showBbox = showBboxCb.checked;
-
-  // Mirror keypoints for drawing/streaming when configured
-  const mirroredPoses = [];
-  for (let i = 0; i < poses.length; i++) {
-    const pose = poses[i];
-    const color = PERSON_COLORS[i % PERSON_COLORS.length];
-
-    const mirrored = pose.keypoints.map((kp) => ({
-      ...kp,
-      x: CONFIG.mirror ? VIDEO_WIDTH - kp.x : kp.x,
-    }));
-
-    mirroredPoses.push({ ...pose, keypoints: mirrored });
-
-    if (showSkel) drawSkeleton(mirrored, color, minConf);
-    if (showPts) drawKeypoints(mirrored, color, minConf);
-    if (showBbox) drawBoundingBox(mirrored, color, minConf);
-    drawPersonLabel(mirrored, i, color, minConf);
-  }
-
-  // Stream mirrored poses + (throttled) raw video to the collector hub
-  lastPeopleCount = poses.length;
-  frameId++;
-  sendSkeletonFrame(mirroredPoses, minConf);
-  maybeSendVideoFrame();
-
-  // Info overlay
-  updateFps();
-  drawFps();
-  ctx.fillStyle = '#00FF00';
-  ctx.font = '14px monospace';
-  ctx.fillText(`People: ${poses.length}`, 10, 45);
-  ctx.fillText(`Model: ${activeModel === 'movenet' ? 'MoveNet 17pt' : 'MediaPipe 33pt 3D'}`, 10, 65);
-
-  scheduleDetect();
 }
 
 // ── Model initialization ────────────────────────────────────────────────────
@@ -901,15 +1079,41 @@ async function initMediaPipe() {
     PoseLandmarkerClass = vision.PoseLandmarker;
     FilesetResolverClass = vision.FilesetResolver;
   }
+
+  // Release previous instance before creating a new one (important when
+  // switching models repeatedly on browsers with limited WebGL contexts).
+  if (mpDetector && typeof mpDetector.close === 'function') {
+    try {
+      mpDetector.close();
+    } catch {
+      // Ignore close errors and continue with a fresh instance.
+    }
+  }
+
   const wasmFileset = await FilesetResolverClass.forVisionTasks('./lib/tasks-vision/wasm');
-  mpDetector = await PoseLandmarkerClass.createFromOptions(wasmFileset, {
-    baseOptions: {
-      modelAssetPath: './model-mediapipe/pose_landmarker_full.task',
-      delegate: 'GPU',
-    },
-    runningMode: 'VIDEO',
-    numPoses: 6,
-  });
+
+  try {
+    mpDetector = await PoseLandmarkerClass.createFromOptions(wasmFileset, {
+      baseOptions: {
+        modelAssetPath: './model-mediapipe/pose_landmarker_full.task',
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      numPoses: 6,
+    });
+  } catch (gpuErr) {
+    console.warn('MediaPipe GPU delegate failed, retrying with CPU delegate:', gpuErr);
+    statusEl.textContent = 'MediaPipe GPU unavailable, falling back to CPU...';
+    mpDetector = await PoseLandmarkerClass.createFromOptions(wasmFileset, {
+      baseOptions: {
+        modelAssetPath: './model-mediapipe/pose_landmarker_full.task',
+        delegate: 'CPU',
+      },
+      runningMode: 'VIDEO',
+      numPoses: 6,
+    });
+  }
+
   activeModel = 'mediapipe';
   activeConnections = MEDIAPIPE_CONNECTIONS;
 }

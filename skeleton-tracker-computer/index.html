@@ -7,10 +7,22 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="header">
-      <h1>Skeleton Tracker — <span id="tracker-id-label">tracker</span></h1>
-      <p id="status">Loading model...</p>
-      <p id="hub-status" class="hub-status">Hub: connecting…</p>
+    <div id="tracker-shell">
+      <div id="header">
+        <h1>Tracker: <span id="tracker-id-label">tracker</span></h1>
+      </div>
+
+      <div id="canvas-container">
+        <video id="video" playsinline></video>
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div id="tracker-meta">
+        <p id="status">Loading model...</p>
+        <span class="meta-sep">•</span>
+        <p id="hub-status" class="hub-status">Hub: connecting…</p>
+      </div>
+
       <div id="controls">
         <label
           >Camera:
@@ -35,10 +47,6 @@
         <label> <input type="checkbox" id="stream-skeleton" checked /> Stream skeleton </label>
         <label> <input type="checkbox" id="stream-raw" checked /> Stream raw video </label>
       </div>
-    </div>
-    <div id="canvas-container">
-      <video id="video" playsinline></video>
-      <canvas id="canvas"></canvas>
     </div>
 
     <!-- TensorFlow.js + MoveNet (local) -->

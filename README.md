@@ -26,9 +26,17 @@ pieces run on one laptop or across several machines on a LAN — only the
 ## Quick start (one machine, the demo)
 
 ```bash
-./start_local_demo.sh            # opens collector + cam-left + cam-right tabs
+./start_local_demo.sh            # opens collector + cam-left + cam-right in tiled windows
 ./start_local_demo.sh cam-left   # one webcam? open a single tracker
 ```
+
+`start_local_demo.sh` now behaves like a small supervisor: re-running it
+automatically cleans up stale local-demo processes from a previous run before
+starting fresh, so close/reopen cycles stay clean.
+
+It also opens tracker pages in separate browser windows (not tabs) and arranges
+them on screen so camera trackers keep running even when you focus another
+window.
 
 This creates a Python virtualenv on first run, downloads the tracker assets if
 missing, starts the hub and the tracker file server, and opens the browser
