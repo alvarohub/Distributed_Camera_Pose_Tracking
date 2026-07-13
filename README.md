@@ -12,6 +12,20 @@ Everything talks over WebSocket + JSON. The transport is identical whether the
 pieces run on one laptop or across several machines on a LAN — only the
 `collector` URL in each tracker's config changes.
 
+## Table of Contents
+
+- [Quick start (one machine, the demo)](#quick-start-one-machine-the-demo)
+- [Running across machines](#running-across-machines)
+- [Repository layout](#repository-layout)
+  - [What each script does](#what-each-script-does)
+- [Per-tracker configuration](#per-tracker-configuration)
+  - [Linux/Jetson camera discovery quick guide](#linuxjetson-camera-discovery-quick-guide)
+- [Install](#install)
+  - [Prerequisites](#prerequisites)
+  - [Clone](#clone)
+  - [One-machine install (demo)](#one-machine-install-demo)
+  - [Multi-machine install](#multi-machine-install)
+
 ```
  ┌──────────────────────────┐         ┌──────────────────────┐
  │ skeleton-tracker-computer │        │ central-collector-    │
@@ -117,5 +131,85 @@ Config precedence: built-in defaults < config file < URL params < live commands
 from the collector. The collector can push runtime changes, **💾 Save defaults**
 (writes the file via `tracker_server.py`), or **↺ Reset** (reloads the file).
 
+### Linux/Jetson camera discovery quick guide
+
+To map USB cameras before editing tracker configs:
+
+```bash
+ls -l /dev/video*
+v4l2-ctl --list-devices
+```
+
+Then set camera indices in:
+
+- `skeleton-tracker-computer/trackers/cam-left.json`
+- `skeleton-tracker-computer/trackers/cam-right.json`
+
+Example: if cameras are `/dev/video0` and `/dev/video2`, use `"camera": 0`
+and `"camera": 2` respectively.
+
+More detail is in `skeleton-tracker-computer/README.md` under per-tracker config.
+
 The canonical message shapes (skeleton frame, command, ack, status) are
 documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Install
+
+Use this section for first-time setup on a new machine.
+
+### Prerequisites
+
+- Python 3.9+ available as `python3`
+- A modern browser (Chrome/Chromium/Safari)
+- Either `curl` or `wget` (used by tracker setup)
+- On Ubuntu/Jetson: install `python3-venv` (required to create `.venv`)
+- On Ubuntu/Jetson: install `python3-pip` (required when pip is missing in `.venv`)
+
+Quick checks:
+
+```bash
+python3 --version
+command -v curl || command -v wget
+# If this fails on Ubuntu/Jetson:
+dpkg -l | grep python3-venv || echo "install with: sudo apt install -y python3-venv"
+dpkg -l | grep python3-pip || echo "install with: sudo apt install -y python3-pip"
+```
+
+### Clone
+
+```bash
+git clone https://github.com/alvarohub/Distributed_Camera_Pose_Tracking.git
+cd Distributed_Camera_Pose_Tracking
+```
+
+### One-machine install (demo)
+
+No extra steps are required. The first run auto-creates `.venv` and installs
+Python dependencies:
+
+```bash
+./start_local_demo.sh
+```
+
+### Multi-machine install
+
+On each tracker machine, run tracker setup once:
+
+```bash
+cd skeleton-tracker-computer
+./setup.sh
+```
+
+On the collector machine, start the collector:
+
+```bash
+cd central-collector-machine
+./start_collector.sh
+```
+
+Then launch trackers pointing to the collector hub:
+
+```bash
+cd skeleton-tracker-computer
+COLLECTOR=ws://<collector-ip>:9000 ./start_trackers.sh
+```

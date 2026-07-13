@@ -85,6 +85,47 @@ the full field documentation.
 exact `deviceId`, or a numeric index. If it doesn't match, the tracker falls
 back to the first camera and warns in the console.
 
+### Linux/Jetson USB camera mapping (where to put `/dev/video*`)
+
+Put camera selection in each tracker config file:
+
+- `trackers/cam-left.json` → set its `"camera"` value
+- `trackers/cam-right.json` → set its `"camera"` value
+
+On Linux/Jetson, discover cameras first:
+
+```bash
+ls -l /dev/video*
+v4l2-ctl --list-devices
+```
+
+If your cameras appear as `/dev/video0` and `/dev/video2`, set:
+
+```json
+"camera": 0
+```
+
+in `trackers/cam-left.json`, and:
+
+```json
+"camera": 2
+```
+
+in `trackers/cam-right.json`.
+
+Important:
+
+- Use the numeric part of `/dev/videoN` as the index (`N`).
+- Browser camera ordering can change after reconnect/reboot; if that happens,
+  switch to a label substring (for example `"camera": "Logitech"`) to make the
+  selection more stable.
+
+Quick test run:
+
+```bash
+COLLECTOR=ws://<collector-ip>:9000 ./start_trackers.sh cam-left cam-right
+```
+
 Precedence: defaults < config file < URL params < live collector commands. The
 collector can apply runtime changes, **save** them back to the file (via
 `tracker_server.py`), or **reset** to the saved file.
