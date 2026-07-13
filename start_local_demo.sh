@@ -16,6 +16,8 @@
 # Optional:
 #   BROWSER_APP="Safari" ./start_local_demo.sh
 #   BROWSER_APP="Google Chrome" ./start_local_demo.sh
+#   BROWSER_APP="xdg-open" ./start_local_demo.sh      # Linux/Jetson
+#   NO_BROWSER=1 ./start_local_demo.sh                 # don't auto-open; print URLs only
 #
 # Everything talks over WebSocket exactly as it would across machines — the
 # only difference here is that all processes happen to run on this one host.
@@ -39,7 +41,13 @@ WS_PORT=9000
 UI_PORT=8090
 HTTP_PORT=8080
 COLLECTOR_URL="ws://localhost:${WS_PORT}"
-BROWSER_APP="${BROWSER_APP:-Safari}"
+OS_NAME="$(uname -s)"
+if [ "$OS_NAME" = "Darwin" ]; then
+  BROWSER_APP="${BROWSER_APP:-Safari}"
+else
+  BROWSER_APP="${BROWSER_APP:-}"
+fi
+OPEN_BROWSER=1
 
 mkdir -p "$RUN_DIR"
 
@@ -167,10 +175,42 @@ wait_for_listen_port() {
 }
 
 ensure_browser_available() {
-  if ! osascript -e "id of application \"${BROWSER_APP}\"" >/dev/null 2>&1; then
-    echo "✗ Browser app '${BROWSER_APP}' is not installed."
-    echo "  Set BROWSER_APP to an installed app, e.g. Safari or Google Chrome."
-    exit 1
+  if [ "${NO_BROWSER:-0}" = "1" ]; then
+    OPEN_BROWSER=0
+    return
+  fi
+
+  if [ "$OS_NAME" = "Darwin" ]; then
+    if ! osascript -e "id of application \"${BROWSER_APP}\"" >/dev/null 2>&1; then
+      echo "✗ Browser app '${BROWSER_APP}' is not installed."
+      echo "  Set BROWSER_APP to an installed app, e.g. Safari or Google Chrome."
+      exit 1
+    fi
+    return
+  fi
+
+  # Linux/Jetson: prefer explicit BROWSER_APP command, else fallback to xdg-open.
+  if [ -n "$BROWSER_APP" ] && command -v "$BROWSER_APP" >/dev/null 2>&1; then
+    return
+  fi
+  if command -v xdg-open >/dev/null 2>&1; then
+    BROWSER_APP="xdg-open"
+    return
+  fi
+
+  OPEN_BROWSER=0
+  echo "⚠  No browser launcher found (BROWSER_APP/xdg-open)."
+  echo "   Services will still start; open these URLs manually:"
+  echo "   - Collector: http://localhost:${UI_PORT}/collector.html"
+  echo "   - Trackers:  http://localhost:${HTTP_PORT}/?id=<tracker-id>"
+}
+
+open_url() {
+  local url="$1"
+  if [ "$OS_NAME" = "Darwin" ]; then
+    open -a "$BROWSER_APP" "$url" 2>/dev/null || true
+  else
+    "$BROWSER_APP" "$url" >/dev/null 2>&1 &
   fi
 }
 
@@ -223,16 +263,16 @@ APPLESCRIPT
   fi
 
   # Generic fallback if AppleScript window placement isn't implemented.
-  open -a "$BROWSER_APP" "$url" 2>/dev/null || true
+  open_url "$url"
 }
 
 open_tiled_windows() {
   local bounds
   bounds="$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null || true)"
   if [ -z "$bounds" ]; then
-    open -a "$BROWSER_APP" "http://localhost:${UI_PORT}/collector.html" 2>/dev/null || true
+    open_url "http://localhost:${UI_PORT}/collector.html"
     for id in "${TRACKER_IDS[@]}"; do
-      open -a "$BROWSER_APP" "http://localhost:${HTTP_PORT}/?id=${id}" 2>/dev/null || true
+      open_url "http://localhost:${HTTP_PORT}/?id=${id}"
     done
     return
   fi
@@ -247,9 +287,9 @@ open_tiled_windows() {
   local screen_w=$((max_x - min_x))
   local screen_h=$((max_y - min_y))
   if [ "$screen_w" -lt 400 ] || [ "$screen_h" -lt 300 ]; then
-    open -a "$BROWSER_APP" "http://localhost:${UI_PORT}/collector.html" 2>/dev/null || true
+    open_url "http://localhost:${UI_PORT}/collector.html"
     for id in "${TRACKER_IDS[@]}"; do
-      open -a "$BROWSER_APP" "http://localhost:${HTTP_PORT}/?id=${id}" 2>/dev/null || true
+      open_url "http://localhost:${HTTP_PORT}/?id=${id}"
     done
     return
   fi
@@ -349,12 +389,19 @@ echo ""
 echo "  Opening collector UI and ${#TRACKER_IDS[@]} tracker window(s): ${TRACKER_IDS[*]}"
 echo "  Each tracker reads its camera + settings from trackers/<id>.json."
 echo "  If a tracker grabbed the wrong camera, edit that file or use the dropdown."
-echo "  Browser app: ${BROWSER_APP} (separate windows, tiled layout)."
+if [ "$OPEN_BROWSER" -eq 1 ]; then
+  echo "  Browser app: ${BROWSER_APP} (separate windows, tiled layout when supported)."
+else
+  echo "  Browser auto-open: disabled"
+  echo "  Open manually: http://localhost:${UI_PORT}/collector.html"
+fi
 echo "  Press Ctrl-C to stop everything."
 echo ""
 
 # 3) Open windows (collector first, then one tracker window per id) and tile them.
-open_tiled_windows
+if [ "$OPEN_BROWSER" -eq 1 ]; then
+  open_tiled_windows
+fi
 
 while true; do
   for pid in "${PIDS[@]}"; do
