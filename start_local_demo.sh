@@ -82,6 +82,49 @@ if [ ! -f "$TRACKER_DIR/lib/tf.min.js" ] || [ ! -f "$TRACKER_DIR/model/model.jso
   (cd "$TRACKER_DIR" && bash setup.sh)
 fi
 
+# ── Camera listing ──────────────────────────────────────────────────────────
+list_cameras() {
+  echo "▸ Cameras detected on this machine:"
+  if [ "$OS_NAME" = "Darwin" ]; then
+    system_profiler SPCameraDataType 2>/dev/null \
+      | awk '/^    [^ ]/{name=$0} /Unique ID/{print NR": "name}' \
+      | sed 's/^/    /' \
+      || echo "    (system_profiler unavailable)"
+  else
+    if command -v v4l2-ctl >/dev/null 2>&1; then
+      v4l2-ctl --list-devices 2>/dev/null | sed 's/^/    /' || true
+    fi
+    for dev in /dev/video*; do
+      [ -e "$dev" ] && echo "    $dev"
+    done
+  fi
+  echo ""
+}
+
+show_tracker_camera_selection() {
+  echo "▸ Tracker camera assignments:"
+  for id in "${TRACKER_IDS[@]}"; do
+    local cfg="$TRACKER_DIR/trackers/${id}.json"
+    local cam="(default — first camera)"
+    if [ -f "$cfg" ]; then
+      cam=$(python3 -c "
+import json,sys
+try:
+  d=json.load(open(sys.argv[1]))
+  c=d.get('camera')
+  print(repr(c) if c is not None else '(default — first camera)')
+except Exception as e:
+  print('(could not read config: '+str(e)+')')
+" "$cfg" 2>/dev/null || echo "(could not read config)")
+    fi
+    echo "    $id  →  camera: $cam"
+  done
+  echo ""
+}
+
+list_cameras
+show_tracker_camera_selection
+
 PIDS=()
 OPEN_PIDS=()
 CLEANUP_DONE=0

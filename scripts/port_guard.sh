@@ -3,14 +3,15 @@
 
 port_pids() {
   local port="$1"
-  lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+  # lsof returns exit-code 1 when no match; || true prevents set -e from aborting
+  lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u || true
 }
 
 describe_ports() {
   local found=0
   local port pids pid
   for port in "$@"; do
-    pids="$(port_pids "$port")"
+    pids="$(port_pids "$port")" || true
     if [ -n "$pids" ]; then
       found=1
       echo "Port $port is already in use:"
@@ -23,9 +24,10 @@ describe_ports() {
 }
 
 stop_ports() {
-  local port pid pids all_pids=()
+  local port pid pids
+  local -a all_pids=()
   for port in "$@"; do
-    pids="$(port_pids "$port")"
+    pids="$(port_pids "$port")" || true
     for pid in $pids; do
       all_pids+=("$pid")
     done
