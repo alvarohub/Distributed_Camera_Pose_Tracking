@@ -18,6 +18,7 @@
 #   BROWSER_APP="Google Chrome" ./start_local_demo.sh
 #   BROWSER_APP="xdg-open" ./start_local_demo.sh      # Linux/Jetson
 #   NO_BROWSER=1 ./start_local_demo.sh                 # don't auto-open; print URLs only
+#   STOP_EXISTING=0 ./start_local_demo.sh              # disable auto-cleanup of old listeners
 #
 # Everything talks over WebSocket exactly as it would across machines — the
 # only difference here is that all processes happen to run on this one host.
@@ -43,13 +44,25 @@ HTTP_PORT=8080
 COLLECTOR_URL="ws://localhost:${WS_PORT}"
 OS_NAME="$(uname -s)"
 if [ "$OS_NAME" = "Darwin" ]; then
-  BROWSER_APP="${BROWSER_APP:-Safari}"
+  # Prefer Chrome — TF.js/WASM runs significantly faster there than in Safari.
+  # Fall back to Safari only if Chrome is not installed.
+  if [ -z "${BROWSER_APP:-}" ]; then
+    if osascript -e 'id of application "Google Chrome"' >/dev/null 2>&1; then
+      BROWSER_APP="Google Chrome"
+    else
+      BROWSER_APP="Safari"
+    fi
+  fi
 else
   BROWSER_APP="${BROWSER_APP:-}"
 fi
 OPEN_BROWSER=1
 
 mkdir -p "$RUN_DIR"
+
+# Fresh-start behavior: by default, stop stale listeners on the demo ports
+# before launching. This avoids manual kill commands for users.
+STOP_EXISTING="${STOP_EXISTING:-1}"
 
 PORT_GUARD_HINT="STOP_EXISTING=1 ./start_local_demo.sh ${TRACKER_IDS[*]}"
 prepare_ports "local demo" "$WS_PORT" "$UI_PORT" "$HTTP_PORT"
