@@ -5,11 +5,11 @@ every connected tracker.
 
 ## Contents
 
-| File | Purpose |
-|---|---|
-| `hub.py` | WebSocket router on `:9000` **and** static server for the UI on `:8090` |
-| `collector.html`, `collector.js`, `collector.css` | The monitor UI: a grid with one tile per tracker |
-| `start_collector.sh` | Launch the hub and open the UI |
+| File                                              | Purpose                                                                 |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `hub.py`                                          | WebSocket router on `:9000` **and** static server for the UI on `:8090` |
+| `collector.html`, `collector.js`, `collector.css` | The monitor UI: a grid with one tile per tracker                        |
+| `start_collector.sh`                              | Launch the hub and open the UI                                          |
 
 ## Run
 
@@ -46,7 +46,7 @@ Each tile shows the raw video with the skeleton overlay, plus controls:
 
 Top bar:
 
-- **Raw video** / **Skeleton** — global *display* toggles (local only; they do
+- **Raw video** / **Skeleton** — global _display_ toggles (local only; they do
   not stop the trackers from streaming — the per-tile **Skel**/**Raw** do that)
 - **Log all** / **Stop all** — broadcast logging commands
 - **⏻ Stop servers** — stop the hub + tracker servers without a terminal

@@ -4,7 +4,7 @@
     "tracker_id": "human label for this tracker (informational; the real id is the ?id= in the URL / filename)",
     "camera": "which webcam: label substring like 'BRIO' or 'FaceTime' (preferred — stable across replugs), OR an exact deviceId, OR a numeric index (0,1,2…). Label matching is case-insensitive.",
     "resolution": "requested capture size { width, height }. The browser picks the closest the camera supports.",
-    "model": "'movenet' (17 keypoints, multi-person, 2D) or 'mediapipe' (33 keypoints, single-person-ish, 3D)",
+    "model": "'movenet' (17 keypoints, multi-person, 2D), 'mediapipe' (33 keypoints, 3D), 'yolov8' (17 keypoints, multi-person, 2D), or 'yolo11' (17 keypoints, multi-person, 2D)",
     "confidence": "0..1 minimum keypoint score used for drawing",
     "mirror": "true = selfie/flip horizontally (raw video AND keypoints stay consistent)",
     "calibration": "RESERVED for later — path to a lens undistortion / calibration file (null for now)",

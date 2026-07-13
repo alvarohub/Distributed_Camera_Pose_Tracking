@@ -92,13 +92,13 @@ so the file stays authoritative without an env override.
 
 ### What each script does
 
-| Script | Where | Purpose |
-|---|---|---|
-| `start_local_demo.sh` | root | All-in-one demo on one machine: hub + tracker server + browser tabs. Accepts tracker ids as args. |
-| `venv.sh` | root | Sourced by the others. Ensures `.venv` exists with deps, exports `$PY`. |
-| `start_collector.sh` | collector | Runs `hub.py` and opens the collector UI. Use on the monitor machine. |
-| `setup.sh` | tracker | One-time download of TF.js, MoveNet, and MediaPipe assets for offline use. |
-| `start_trackers.sh` | tracker | Runs `tracker_server.py` and opens tracker tabs. `COLLECTOR=ws://… ` overrides the hub URL. |
+| Script                | Where     | Purpose                                                                                           |
+| --------------------- | --------- | ------------------------------------------------------------------------------------------------- |
+| `start_local_demo.sh` | root      | All-in-one demo on one machine: hub + tracker server + browser tabs. Accepts tracker ids as args. |
+| `venv.sh`             | root      | Sourced by the others. Ensures `.venv` exists with deps, exports `$PY`.                           |
+| `start_collector.sh`  | collector | Runs `hub.py` and opens the collector UI. Use on the monitor machine.                             |
+| `setup.sh`            | tracker   | One-time download of TF.js, MoveNet, and MediaPipe assets for offline use.                        |
+| `start_trackers.sh`   | tracker   | Runs `tracker_server.py` and opens tracker tabs. `COLLECTOR=ws://… ` overrides the hub URL.       |
 
 ## Per-tracker configuration
 

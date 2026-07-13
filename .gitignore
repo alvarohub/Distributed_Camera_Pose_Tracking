@@ -2,6 +2,9 @@
 skeleton-tracker-computer/lib/
 skeleton-tracker-computer/model/
 skeleton-tracker-computer/model-mediapipe/
+skeleton-tracker-computer/model-yolo/
+skeleton-tracker-computer/*-pose.pt
+skeleton-tracker-computer/*-pose.onnx
 
 # OS
 .DS_Store
@@ -16,3 +19,6 @@ __pycache__/
 
 # Backups written when the collector saves new tracker defaults
 skeleton-tracker-computer/trackers/*.json.bak
+
+# Local upstream study clone (Jetson reference code)
+skeleton-tracker-computer/targets/jetson-orin/upstream/jetson-examples/

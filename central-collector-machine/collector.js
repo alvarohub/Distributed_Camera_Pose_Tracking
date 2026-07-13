@@ -117,6 +117,7 @@ function ensureTile(trackerId) {
 
   const rawCb = node.querySelector('.ctl-raw');
   rawCb.addEventListener('change', () => {
+    state.rawReady = false;
     sendCommand(trackerId, rawCb.checked ? 'start_video' : 'stop_video', {});
   });
 
@@ -171,7 +172,8 @@ function removeTile(trackerId) {
 // ── Rendering ────────────────────────────────────────────────────────────────
 function renderTile(state) {
   const { ctx, canvas } = state;
-  const showRaw = globalRaw.checked;
+  const rawCb = state.node.querySelector('.ctl-raw');
+  const showRaw = globalRaw.checked && (!rawCb || rawCb.checked);
   const showSkel = globalSkeleton.checked;
 
   // Resize canvas to match source resolution if needed

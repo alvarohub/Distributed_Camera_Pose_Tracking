@@ -1,0 +1,6 @@
+# Optional dependencies for skeleton-tracker-computer/headless_yolo_tracker.py
+# Install into the project venv from the repo root:
+#   .venv/bin/python -m pip install -r requirements-headless-yolo.txt
+-r requirements.txt
+opencv-python>=4.10
+ultralytics>=8.3

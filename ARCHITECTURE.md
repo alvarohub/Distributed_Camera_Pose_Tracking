@@ -297,9 +297,7 @@ Each following line:
   "people": [
     {
       "id": 0,
-      "keypoints": [
-        { "x": 321.4, "y": 118.2, "z": -0.08, "score": 0.99 }
-      ]
+      "keypoints": [{ "x": 321.4, "y": 118.2, "z": -0.08, "score": 0.99 }]
     }
   ]
 }

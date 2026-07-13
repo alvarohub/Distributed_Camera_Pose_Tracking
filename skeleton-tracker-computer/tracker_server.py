@@ -50,6 +50,14 @@ class TrackerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HERE), **kwargs)
 
+    def do_GET(self):
+        if self.path.split("?", 1)[0] == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        super().do_GET()
+
     def _json(self, code, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)

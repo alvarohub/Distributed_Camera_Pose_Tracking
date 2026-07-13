@@ -7,14 +7,55 @@ frames) to the collector hub over WebSocket.
 
 ## Contents
 
-| File | Purpose |
-|---|---|
-| `index.html`, `app.js`, `style.css` | The browser tracker UI + pose inference + streaming |
-| `tracker_server.py` | Static file server (+ `POST /api/save-config` to persist `trackers/<id>.json`) |
-| `setup.sh` | One-time download of TF.js, MoveNet, and MediaPipe assets (offline-capable) |
-| `start_trackers.sh` | Serve the page and open tracker tabs |
-| `trackers/` | Per-tracker config files; `example.json` is a documented template |
-| `lib/`, `model/`, `model-mediapipe/` | Downloaded runtime + model assets |
+| File                                 | Purpose                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| `index.html`, `app.js`, `style.css`  | The browser tracker UI + pose inference + streaming                            |
+| `tracker_server.py`                  | Static file server (+ `POST /api/save-config` to persist `trackers/<id>.json`) |
+| `setup.sh`                           | One-time download of TF.js, MoveNet, and MediaPipe assets (offline-capable)    |
+| `start_trackers.sh`                  | Serve the page and open tracker tabs                                           |
+| `trackers/`                          | Per-tracker config files; `example.json` is a documented template              |
+| `lib/`, `model/`, `model-mediapipe/` | Downloaded runtime + model assets                                              |
+
+## Install
+
+Use this once on each tracker machine.
+
+### 1) Prerequisites
+
+- Python 3.9+ available as `python3`
+- A modern browser with camera permissions (Chrome/Chromium recommended)
+- Network access to the collector machine (`ws://<collector-ip>:9000`)
+
+Quick checks:
+
+```bash
+python3 --version
+command -v curl
+```
+
+### 2) Get the project
+
+```bash
+git clone https://github.com/alvarohub/module2_videoToSkeleton_anonymizer.git
+cd module2_videoToSkeleton_anonymizer/skeleton-tracker-computer
+```
+
+### 3) Download tracker runtime assets
+
+```bash
+./setup.sh
+```
+
+This fetches and stores local copies of TensorFlow.js, MoveNet, MediaPipe, and
+ONNX Runtime assets used by the browser tracker.
+
+### 4) Verify install
+
+```bash
+test -f lib/tf.min.js && echo "tf.js ok"
+test -f model/model.json && echo "movenet ok"
+test -f lib/onnxruntime-web/ort.min.js && echo "onnxruntime ok"
+```
 
 ## Run
 

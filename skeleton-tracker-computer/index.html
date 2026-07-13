@@ -35,6 +35,8 @@
           <select id="model-select">
             <option value="movenet">MoveNet MultiPose (17pts, multi-person)</option>
             <option value="mediapipe">MediaPipe BlazePose (33pts, 3D)</option>
+            <option value="yolov8">YOLOv8n Pose (17pts, multi-person)</option>
+            <option value="yolo11">YOLO11n Pose (17pts, multi-person)</option>
           </select>
         </label>
         <label
@@ -52,6 +54,7 @@
     <!-- TensorFlow.js + MoveNet (local) -->
     <script src="lib/tf.min.js"></script>
     <script src="lib/pose-detection.min.js"></script>
+    <script src="lib/onnxruntime-web/ort.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# setup.sh — Download TF.js libraries + MoveNet model for fully offline use
+# setup.sh — Download browser runtimes + pose models for fully offline use
 # Run once.  After this, the folder is self-contained.
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
@@ -56,6 +56,52 @@ mkdir -p model-mediapipe
 curl -sL -o model-mediapipe/pose_landmarker_full.task \
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task"
 
+echo "▸ Downloading ONNX Runtime Web..."
+ORT_VERSION="1.18.0"
+mkdir -p lib/onnxruntime-web
+curl -fsSL -o lib/onnxruntime-web/ort.min.js \
+  "https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.min.js"
+for f in ort-wasm.wasm ort-wasm-simd.wasm ort-wasm-threaded.wasm ort-wasm-simd-threaded.wasm; do
+  echo "  ▸ $f"
+  curl -fsSL -o "lib/onnxruntime-web/$f" \
+    "https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/$f"
+done
+
+echo "▸ Preparing YOLO pose ONNX models..."
+mkdir -p model-yolo
+if [ "${SKIP_YOLO:-0}" = "1" ]; then
+  echo "  ▸ skipped (SKIP_YOLO=1)"
+else
+  if ! python3 - <<'PY'
+import importlib.util
+raise SystemExit(0 if importlib.util.find_spec('ultralytics') else 1)
+PY
+  then
+    echo "  ▸ installing ultralytics exporter (this may take a while)..."
+    pip3 install ultralytics
+  fi
+
+  if ! python3 - <<'PY'
+from pathlib import Path
+from ultralytics import YOLO
+
+outdir = Path('model-yolo')
+outdir.mkdir(exist_ok=True)
+for weights in ('yolov8n-pose.pt', 'yolo11n-pose.pt'):
+    out = outdir / f'{Path(weights).stem}.onnx'
+    if out.exists():
+        print(f'  ▸ {out} already exists')
+        continue
+    print(f'  ▸ exporting {weights} → {out}')
+    exported = Path(YOLO(weights).export(format='onnx', imgsz=640, opset=12, simplify=False, dynamic=False))
+    exported.replace(out)
+PY
+  then
+    echo "  ⚠ YOLO export failed. MoveNet/MediaPipe still work."
+    echo "    To add YOLO later, place yolov8n-pose.onnx and yolo11n-pose.onnx in model-yolo/."
+  fi
+fi
+
 echo ""
 echo "▸ Installing Python websockets package..."
 pip3 install websockets
@@ -66,5 +112,11 @@ echo "  MoveNet model:"
 du -sh model/
 echo "  MediaPipe model:"
 du -sh model-mediapipe/
+echo "  ONNX Runtime Web:"
+du -sh lib/onnxruntime-web/
+if [ -d model-yolo ]; then
+  echo "  YOLO pose models:"
+  du -sh model-yolo/
+fi
 echo ""
-echo "Run ./start.sh to launch the tracker."
+echo "Run ./start_trackers.sh to launch the tracker."

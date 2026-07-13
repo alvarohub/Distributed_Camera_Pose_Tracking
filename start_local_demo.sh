@@ -27,6 +27,7 @@ COLLECTOR_DIR="$ROOT_DIR/central-collector-machine"
 TRACKER_DIR="$ROOT_DIR/skeleton-tracker-computer"
 RUN_DIR="$ROOT_DIR/.run"
 PID_FILE="$RUN_DIR/start_local_demo.pids"
+source "$ROOT_DIR/scripts/port_guard.sh"
 
 # Tracker ids to open (each needs a matching trackers/<id>.json). Override via args.
 TRACKER_IDS=("$@")
@@ -42,6 +43,9 @@ BROWSER_APP="${BROWSER_APP:-Safari}"
 
 mkdir -p "$RUN_DIR"
 
+PORT_GUARD_HINT="STOP_EXISTING=1 ./start_local_demo.sh ${TRACKER_IDS[*]}"
+prepare_ports "local demo" "$WS_PORT" "$UI_PORT" "$HTTP_PORT"
+
 # Ensure the project venv exists with all deps, then use its python ($PY)
 source "$ROOT_DIR/venv.sh"
 
@@ -52,7 +56,7 @@ source "$ROOT_DIR/venv.sh"
 export HUB_KILL_PROCESS_GROUP=1
 
 # Ensure tracker dependencies exist
-if [ ! -f "$TRACKER_DIR/lib/tf.min.js" ] || [ ! -f "$TRACKER_DIR/model/model.json" ]; then
+if [ ! -f "$TRACKER_DIR/lib/tf.min.js" ] || [ ! -f "$TRACKER_DIR/model/model.json" ] || [ ! -f "$TRACKER_DIR/lib/onnxruntime-web/ort.min.js" ]; then
   echo "⚠  Tracker dependencies not found. Running setup first..."
   (cd "$TRACKER_DIR" && bash setup.sh)
 fi

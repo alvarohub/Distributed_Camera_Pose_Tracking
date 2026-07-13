@@ -14,7 +14,7 @@ const TRACKER_ID = urlParams.get('id') || `tracker-${Math.random().toString(36).
 // Source of truth for hardware-specific settings. Fields:
 //   camera       camera label substring | exact deviceId | numeric index
 //   resolution   { width, height }
-//   model        'movenet' | 'mediapipe'
+//   model        'movenet' | 'mediapipe' | 'yolov8' | 'yolo11'
 //   confidence   0..1 minimum keypoint score
 //   mirror        flip horizontally (selfie view)
 //   streamSkeleton send computed keypoints/skeleton frames to the collector
@@ -193,8 +193,33 @@ const MEDIAPIPE_CONNECTIONS = [
   [30, 32], // right foot
 ];
 
+// ── YOLO pose (17 COCO keypoints, 2D) ───────────────────────────────────────
+const YOLO_INPUT_SIZE = 640;
+const YOLO_MAX_POSES = 6;
+const YOLO_NMS_IOU = 0.45;
+const YOLO_MODELS = {
+  yolov8: {
+    label: 'YOLOv8n Pose 17pt',
+    modelPath: './model-yolo/yolov8n-pose.onnx',
+  },
+  yolo11: {
+    label: 'YOLO11n Pose 17pt',
+    modelPath: './model-yolo/yolo11n-pose.onnx',
+  },
+};
+
+function isYoloModel(model) {
+  return Object.prototype.hasOwnProperty.call(YOLO_MODELS, model);
+}
+
+function modelLabel(model) {
+  if (model === 'movenet') return 'MoveNet 17pt';
+  if (model === 'mediapipe') return 'MediaPipe 33pt 3D';
+  return YOLO_MODELS[model]?.label || model;
+}
+
 // ── Active model state ──────────────────────────────────────────────────────
-let activeModel = 'movenet'; // 'movenet' | 'mediapipe'
+let activeModel = 'movenet'; // 'movenet' | 'mediapipe' | 'yolov8' | 'yolo11'
 let activeConnections = MOVENET_CONNECTIONS;
 let running = false;
 
@@ -604,13 +629,16 @@ function queueLogEntry(poses) {
 
 function connectWebSocket() {
   setHubStatus('connecting…');
-  ws = new WebSocket(CONFIG.collector);
-  ws.onopen = () => {
+  const socket = new WebSocket(CONFIG.collector);
+  ws = socket;
+  socket.onopen = () => {
+    if (ws !== socket) return;
     wsConnected = true;
     setHubStatus('connected ✓', 'ready');
     sendHello();
   };
-  ws.onmessage = (evt) => {
+  socket.onmessage = (evt) => {
+    if (ws !== socket) return;
     let msg;
     try {
       msg = JSON.parse(evt.data);
@@ -619,12 +647,15 @@ function connectWebSocket() {
     }
     if (msg.type === 'command') handleCommand(msg);
   };
-  ws.onclose = () => {
+  socket.onclose = () => {
+    if (ws !== socket) return;
     wsConnected = false;
     setHubStatus('disconnected — retrying', 'error');
     setTimeout(connectWebSocket, 2000);
   };
-  ws.onerror = () => ws.close();
+  socket.onerror = () => {
+    if (ws === socket) socket.close();
+  };
 }
 
 // ── Command handling ─────────────────────────────────────────────────────────
@@ -935,8 +966,14 @@ function drawFps() {
 // ── Main loop ───────────────────────────────────────────────────────────────
 let detector = null; // MoveNet
 let mpDetector = null; // MediaPipe PoseLandmarker
+let yoloSession = null; // ONNX Runtime Web session
+let yoloActiveModel = null;
 let PoseLandmarkerClass = null;
 let FilesetResolverClass = null;
+const yoloCanvas = document.createElement('canvas');
+yoloCanvas.width = YOLO_INPUT_SIZE;
+yoloCanvas.height = YOLO_INPUT_SIZE;
+const yoloCtx = yoloCanvas.getContext('2d', { willReadFrequently: true });
 
 // Schedule the next detect() iteration. Trackers are meant to run "headless"
 // (you watch the collector, not this tab), so we must NOT rely on
@@ -997,6 +1034,8 @@ async function detect() {
           name: MEDIAPIPE_KEYPOINT_NAMES[j],
         })),
       }));
+    } else if (isYoloModel(activeModel) && yoloSession) {
+      poses = await estimateYoloPoses(video);
     } else {
       return;
     }
@@ -1050,12 +1089,125 @@ async function detect() {
     ctx.fillStyle = '#00FF00';
     ctx.font = '14px monospace';
     ctx.fillText(`People: ${poses.length}`, 10, 45);
-    ctx.fillText(`Model: ${activeModel === 'movenet' ? 'MoveNet 17pt' : 'MediaPipe 33pt 3D'}`, 10, 65);
+    ctx.fillText(`Model: ${modelLabel(activeModel)}`, 10, 65);
   } catch (err) {
     console.error('Detection loop error:', err);
   } finally {
     if (running) scheduleDetect();
   }
+}
+
+function prepareYoloInput(source) {
+  const scale = Math.min(YOLO_INPUT_SIZE / VIDEO_WIDTH, YOLO_INPUT_SIZE / VIDEO_HEIGHT);
+  const drawW = VIDEO_WIDTH * scale;
+  const drawH = VIDEO_HEIGHT * scale;
+  const padX = (YOLO_INPUT_SIZE - drawW) / 2;
+  const padY = (YOLO_INPUT_SIZE - drawH) / 2;
+
+  yoloCtx.fillStyle = '#000';
+  yoloCtx.fillRect(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE);
+  yoloCtx.drawImage(source, padX, padY, drawW, drawH);
+
+  const { data } = yoloCtx.getImageData(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE);
+  const input = new Float32Array(3 * YOLO_INPUT_SIZE * YOLO_INPUT_SIZE);
+  const plane = YOLO_INPUT_SIZE * YOLO_INPUT_SIZE;
+  for (let i = 0; i < plane; i++) {
+    const src = i * 4;
+    input[i] = data[src] / 255;
+    input[plane + i] = data[src + 1] / 255;
+    input[plane * 2 + i] = data[src + 2] / 255;
+  }
+  return { input, scale, padX, padY };
+}
+
+function yoloValue(data, dims, attr, index) {
+  if (dims.length === 3) {
+    if (dims[1] <= dims[2]) return data[attr * dims[2] + index];
+    return data[index * dims[2] + attr];
+  }
+  return data[index * dims[1] + attr];
+}
+
+function boxIou(a, b) {
+  const x1 = Math.max(a.x1, b.x1);
+  const y1 = Math.max(a.y1, b.y1);
+  const x2 = Math.min(a.x2, b.x2);
+  const y2 = Math.min(a.y2, b.y2);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const areaA = Math.max(0, a.x2 - a.x1) * Math.max(0, a.y2 - a.y1);
+  const areaB = Math.max(0, b.x2 - b.x1) * Math.max(0, b.y2 - b.y1);
+  return inter / Math.max(1e-6, areaA + areaB - inter);
+}
+
+function clampPoint(x, y) {
+  return {
+    x: Math.max(0, Math.min(VIDEO_WIDTH, x)),
+    y: Math.max(0, Math.min(VIDEO_HEIGHT, y)),
+  };
+}
+
+function decodeYoloOutput(tensor, scale, padX, padY) {
+  const dims = tensor.dims;
+  if (dims.length !== 2 && dims.length !== 3) throw new Error(`Unsupported YOLO output shape: ${dims.join('x')}`);
+
+  const attrs = dims.length === 3 ? Math.min(dims[1], dims[2]) : dims[1];
+  const count = dims.length === 3 ? Math.max(dims[1], dims[2]) : dims[0];
+  const keypointOffset = attrs - MOVENET_KEYPOINT_NAMES.length * 3;
+  const scoreIndex = keypointOffset - 1;
+  if (keypointOffset < 5) throw new Error(`Unsupported YOLO pose attribute count: ${attrs}`);
+
+  const minScore = Math.max(0.05, parseFloat(confSlider.value) * 0.5);
+  const candidates = [];
+  for (let i = 0; i < count; i++) {
+    const score = yoloValue(tensor.data, dims, scoreIndex, i);
+    if (score < minScore) continue;
+
+    const cx = yoloValue(tensor.data, dims, 0, i);
+    const cy = yoloValue(tensor.data, dims, 1, i);
+    const w = yoloValue(tensor.data, dims, 2, i);
+    const h = yoloValue(tensor.data, dims, 3, i);
+    const x1 = (cx - w / 2 - padX) / scale;
+    const y1 = (cy - h / 2 - padY) / scale;
+    const x2 = (cx + w / 2 - padX) / scale;
+    const y2 = (cy + h / 2 - padY) / scale;
+
+    const keypoints = MOVENET_KEYPOINT_NAMES.map((name, k) => {
+      const offset = keypointOffset + k * 3;
+      const pt = clampPoint(
+        (yoloValue(tensor.data, dims, offset, i) - padX) / scale,
+        (yoloValue(tensor.data, dims, offset + 1, i) - padY) / scale,
+      );
+      return {
+        ...pt,
+        z: 0,
+        score: Math.max(0, Math.min(1, yoloValue(tensor.data, dims, offset + 2, i))),
+        name,
+      };
+    });
+
+    candidates.push({ score, x1, y1, x2, y2, keypoints });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const selected = [];
+  for (const candidate of candidates) {
+    if (selected.every((kept) => boxIou(candidate, kept) < YOLO_NMS_IOU)) {
+      selected.push(candidate);
+      if (selected.length >= YOLO_MAX_POSES) break;
+    }
+  }
+  return selected.map((pose, id) => ({ id, keypoints: pose.keypoints }));
+}
+
+async function estimateYoloPoses(source) {
+  const ortRuntime = window.ort;
+  if (!ortRuntime) throw new Error('ONNX Runtime Web is not loaded. Run setup.sh and reload the tracker.');
+  const { input, scale, padX, padY } = prepareYoloInput(source);
+  const tensor = new ortRuntime.Tensor('float32', input, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]);
+  const feeds = { [yoloSession.inputNames[0]]: tensor };
+  const results = await yoloSession.run(feeds);
+  const output = results[yoloSession.outputNames[0]];
+  return decodeYoloOutput(output, scale, padX, padY);
 }
 
 // ── Model initialization ────────────────────────────────────────────────────
@@ -1118,6 +1270,26 @@ async function initMediaPipe() {
   activeConnections = MEDIAPIPE_CONNECTIONS;
 }
 
+async function initYolo(model) {
+  const cfg = YOLO_MODELS[model];
+  if (!cfg) throw new Error(`Unknown YOLO model: ${model}`);
+  const ortRuntime = window.ort;
+  if (!ortRuntime) throw new Error('ONNX Runtime Web is not loaded. Run setup.sh and reload the tracker.');
+
+  statusEl.textContent = `Loading ${cfg.label}...`;
+  ortRuntime.env.wasm.wasmPaths = './lib/onnxruntime-web/';
+  ortRuntime.env.wasm.numThreads = 1;
+  if (!yoloSession || yoloActiveModel !== model) {
+    yoloSession = await ortRuntime.InferenceSession.create(cfg.modelPath, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    yoloActiveModel = model;
+  }
+  activeModel = model;
+  activeConnections = MOVENET_CONNECTIONS;
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 async function switchModel(model) {
   running = false;
@@ -1127,6 +1299,8 @@ async function switchModel(model) {
   try {
     if (model === 'mediapipe') {
       await initMediaPipe();
+    } else if (isYoloModel(model)) {
+      await initYolo(model);
     } else {
       await initMoveNet();
     }
@@ -1177,6 +1351,8 @@ async function main() {
 
     if (CONFIG.model === 'mediapipe') {
       await initMediaPipe();
+    } else if (isYoloModel(CONFIG.model)) {
+      await initYolo(CONFIG.model);
     } else {
       await initMoveNet();
     }
