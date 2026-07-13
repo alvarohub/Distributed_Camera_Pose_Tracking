@@ -25,19 +25,20 @@ Use this once on each tracker machine.
 - Python 3.9+ available as `python3`
 - A modern browser with camera permissions (Chrome/Chromium recommended)
 - Network access to the collector machine (`ws://<collector-ip>:9000`)
+- Either `curl` or `wget` installed (used by `setup.sh`)
 
 Quick checks:
 
 ```bash
 python3 --version
-command -v curl
+command -v curl || command -v wget
 ```
 
 ### 2) Get the project
 
 ```bash
-git clone https://github.com/alvarohub/module2_videoToSkeleton_anonymizer.git
-cd module2_videoToSkeleton_anonymizer/skeleton-tracker-computer
+git clone https://github.com/alvarohub/Distributed_Camera_Pose_Tracking.git
+cd Distributed_Camera_Pose_Tracking/skeleton-tracker-computer
 ```
 
 ### 3) Download tracker runtime assets
