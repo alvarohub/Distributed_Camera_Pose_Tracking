@@ -109,6 +109,7 @@ so the file stays authoritative without an env override.
 | Script                | Where     | Purpose                                                                                           |
 | --------------------- | --------- | ------------------------------------------------------------------------------------------------- |
 | `start_local_demo.sh` | root      | All-in-one demo on one machine: hub + tracker server + browser tabs. Accepts tracker ids as args. |
+| `stop_local_demo.sh`  | root      | Stops local demo listeners on ports 9000/8090/8080 for a clean restart.                           |
 | `venv.sh`             | root      | Sourced by the others. Ensures `.venv` exists with deps, exports `$PY`.                           |
 | `start_collector.sh`  | collector | Runs `hub.py` and opens the collector UI. Use on the monitor machine.                             |
 | `setup.sh`            | tracker   | One-time download of TF.js, MoveNet, and MediaPipe assets for offline use.                        |
@@ -131,13 +132,23 @@ Config precedence: built-in defaults < config file < URL params < live commands
 from the collector. The collector can push runtime changes, **💾 Save defaults**
 (writes the file via `tracker_server.py`), or **↺ Reset** (reloads the file).
 
-### Linux/Jetson camera discovery quick guide
+### Camera discovery quick guide
 
 To map USB cameras before editing tracker configs:
+
+**On Linux/Jetson:**
 
 ```bash
 ls -l /dev/video*
 v4l2-ctl --list-devices
+```
+
+**On macOS:**
+
+```bash
+system_profiler SPCameraDataType | grep "^    [^ ]" | sed "s/://g"
+# Or use ffmpeg to list AVFoundation devices:
+# ffmpeg -f avfoundation -list_devices true -i ""
 ```
 
 Then set camera indices in:
@@ -189,6 +200,16 @@ Python dependencies:
 
 ```bash
 ./start_local_demo.sh
+```
+
+Fresh start notes:
+
+- `start_local_demo.sh` now auto-cleans stale listeners on ports 9000/8090/8080
+  before launching, so re-running it gives a clean restart by default.
+- If needed, you can stop listeners explicitly with:
+
+```bash
+./stop_local_demo.sh
 ```
 
 ### Multi-machine install

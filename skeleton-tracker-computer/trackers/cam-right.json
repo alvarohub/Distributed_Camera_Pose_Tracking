@@ -3,7 +3,7 @@
   "tracker_id": "cam-right",
 
   "_camera": "── CAMERA: physical capture ──",
-  "camera": 1,
+  "camera": 2,
   "resolution": { "width": 640, "height": 480 },
 
   "_processing": "── PROCESSING: how frames are analyzed ──",

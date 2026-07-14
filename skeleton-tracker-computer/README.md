@@ -85,21 +85,29 @@ the full field documentation.
 exact `deviceId`, or a numeric index. If it doesn't match, the tracker falls
 back to the first camera and warns in the console.
 
-### Linux/Jetson USB camera mapping (where to put `/dev/video*`)
+### OS Camera mapping (where to put bounds and `/dev/video*`)
 
 Put camera selection in each tracker config file:
 
 - `trackers/cam-left.json` → set its `"camera"` value
 - `trackers/cam-right.json` → set its `"camera"` value
 
-On Linux/Jetson, discover cameras first:
+Discover cameras first depending on your OS:
+
+**On Linux/Jetson:**
 
 ```bash
 ls -l /dev/video*
 v4l2-ctl --list-devices
 ```
 
-If your cameras appear as `/dev/video0` and `/dev/video2`, set:
+**On macOS:**
+
+```bash
+system_profiler SPCameraDataType | grep "^    [^ ]" | sed "s/://g"
+```
+
+If your Linux cameras appear as `/dev/video0` and `/dev/video2`, set:
 
 ```json
 "camera": 0
